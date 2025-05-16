@@ -103,7 +103,21 @@ def run_rebalance(securities_df: pd.DataFrame) -> pd.DataFrame:
 st.title("Constrained Portfolio Rebalancing")
 st.write("Upload an Excel file with columns: Ticker, risk, asset_class, target, constrained.")
 
+# Provide a downloadable template
+template_df = pd.DataFrame(columns=["Ticker", "risk", "asset_class", "target", "constrained"])
+template_buffer = io.BytesIO()
+with pd.ExcelWriter(template_buffer, engine="openpyxl") as writer:
+    template_df.to_excel(writer, index=False, sheet_name="Template")
+template_buffer.seek(0)
+st.download_button(
+    "Download Excel template",
+    data=template_buffer,
+    file_name="rebalance_template.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
 uploaded = st.file_uploader("Upload Excel file", type=["xlsx"])
+
 if uploaded:
     try:
         df = pd.read_excel(uploaded)
