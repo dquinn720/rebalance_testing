@@ -7,36 +7,36 @@ class Node:
     def __init__(self, name: str, target: float, constraint: float, children: List['Node'] = None):
         self.name = name
         self.target = float(target)
-        self.constraint = float(constraint) if constraint not in [None, '', 'nan', 'NaN'] and not pd.isna(constraint) else float('inf')
+        self.constraint = float(constraint) if pd.notnull(constraint) else 0.0
         self.children = children or []
         self.allocation = 0.0
 
 def waterfall_rebalance(nodes: List[Node]) -> None:
     total_target = sum(n.target for n in nodes)
-    total_constraint = sum(min(n.constraint, n.target) for n in nodes)
+    total_constraint = sum(n.constraint for n in nodes)
     extra = total_target - total_constraint
-    overshoots = [max(min(n.constraint, n.target) - n.target, 0.0) for n in nodes]
+    overshoots = [max(n.constraint - n.target, 0.0) for n in nodes]
     overshoot_total = sum(overshoots)
 
     if overshoot_total > 0 and extra > 0:
-        free_nodes = [n for n in nodes if n.constraint > n.target]
+        free_nodes = [n for n in nodes if n.constraint < n.target]
         sum_targets_free = sum(n.target for n in free_nodes)
         for n in nodes:
-            if n.constraint < n.target:
+            if n.constraint > n.target:
                 n.allocation = n.constraint
             else:
                 n.allocation = n.target - (overshoot_total * (n.target / sum_targets_free))
     elif extra > 0:
-        head_nodes = [n for n in nodes if n.constraint > n.target]
-        head_sum = sum(n.constraint - n.target for n in head_nodes)
+        head_nodes = [n for n in nodes if n.constraint < n.target]
+        head_sum = sum(n.target - n.constraint for n in head_nodes)
         for n in nodes:
-            if n.constraint <= n.target:
+            if n.constraint >= n.target:
                 n.allocation = n.constraint
             else:
-                n.allocation = n.target + ((n.constraint - n.target) * (extra / head_sum))
+                n.allocation = n.constraint + ((n.target - n.constraint) * (extra / head_sum))
     else:
         for n in nodes:
-            n.allocation = min(n.target, n.constraint)
+            n.allocation = n.constraint
 
     for parent in nodes:
         if parent.children:
@@ -61,7 +61,6 @@ if uploaded_file:
     else:
         df = pd.read_excel(uploaded_file, engine="openpyxl")
 
-
     if not set(["Ticker", "Risk", "Asset Class", "Target", "Constraint"]).issubset(df.columns):
         st.error("Missing required columns in the Excel file.")
     else:
@@ -74,7 +73,7 @@ if uploaded_file:
         for risk, acs in risk_map.items():
             ac_nodes = [Node(ac,
                              sum(securities[t]['Target'] for t in tickers),
-                             sum(securities[t]['Constraint'] if pd.notnull(securities[t]['Constraint']) else 0 for t in tickers),
+                             sum(securities[t]['Constraint'] or 0 for t in tickers),
                              [Node(t, securities[t]['Target'], securities[t]['Constraint']) for t in tickers])
                         for ac, tickers in acs.items()]
             roots.append(Node(risk,
@@ -91,7 +90,7 @@ if uploaded_file:
                     rows.append({
                         'Ticker': s.name,
                         'Target': round(s.target, 2),
-                        'Constraint': "None" if s.constraint == float('inf') else round(s.constraint, 2),
+                        'Constraint': round(s.constraint, 2) if pd.notnull(s.constraint) else "None",
                         'Computed Allocation': round(s.allocation, 2)
                     })
         result_df = pd.DataFrame(rows)
