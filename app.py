@@ -1,43 +1,34 @@
+import streamlit as st
 import pandas as pd
 from typing import List
-import streamlit as st
 
-# --- Node Class and Rebalance Logic ---
+# --- Algorithm Implementation ---
 class Node:
     def __init__(self, name: str, target: float, constraint: float, children: List['Node'] = None):
-        self.name = name
-        self.target = float(target)
-        self.constraint = float(constraint) if pd.notnull(constraint) else 0.0
-        self.children = children or []
+        self.name       = name
+        self.target     = float(target)
+        self.constraint = float(constraint) if constraint is not None else 0.0
+        self.children   = children or []
         self.allocation = 0.0
 
+
 def waterfall_rebalance(nodes: List[Node]) -> None:
-    total_target = sum(n.target for n in nodes)
+    total_target     = sum(n.target     for n in nodes)
     total_constraint = sum(n.constraint for n in nodes)
     extra = total_target - total_constraint
-    overshoots = [max(n.constraint - n.target, 0.0) for n in nodes]
-    overshoot_total = sum(overshoots)
-
-    if overshoot_total > 0 and extra > 0:
-        free_nodes = [n for n in nodes if n.constraint < n.target]
-        sum_targets_free = sum(n.target for n in free_nodes)
+    # 1) Distribute headroom proportionally if any
+    if extra > 0:
+        head_sum = sum((n.target - n.constraint) for n in nodes if n.target > n.constraint)
         for n in nodes:
-            if n.constraint > n.target:
-                n.allocation = n.constraint
-            else:
-                n.allocation = n.target - (overshoot_total * (n.target / sum_targets_free))
-    elif extra > 0:
-        head_nodes = [n for n in nodes if n.constraint < n.target]
-        head_sum = sum(n.target - n.constraint for n in head_nodes)
-        for n in nodes:
-            if n.constraint >= n.target:
+            if n.target <= n.constraint:
                 n.allocation = n.constraint
             else:
                 n.allocation = n.constraint + ((n.target - n.constraint) * (extra / head_sum))
+    # 2) No headroom: everyone at constraint
     else:
         for n in nodes:
             n.allocation = n.constraint
-
+    # Recurse into children
     for parent in nodes:
         if parent.children:
             child_total = sum(c.target for c in parent.children) or 1.0
@@ -45,54 +36,87 @@ def waterfall_rebalance(nodes: List[Node]) -> None:
                 c.target = (c.target / child_total) * parent.allocation
             waterfall_rebalance(parent.children)
 
+
+def run_rebalance(securities_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Run the constrained rebalance algorithm on an input DataFrame.
+    Expects columns: Ticker, risk, asset_class, target, constrained
+    Returns a DataFrame with columns: Ticker, Allocation
+    """
+    # Build a dict of security metadata
+    sec = {
+        row['Ticker']: {
+            'risk': row['risk'],
+            'asset_class': row['asset_class'],
+            'target': row['target'],
+            'constrained': row['constrained']
+        }
+        for _, row in securities_df.iterrows()
+    }
+    # Group by risk and asset class
+    risk_map = {}
+    for ticker, meta in sec.items():
+        risk_map.setdefault(meta['risk'], {})
+        risk_map[meta['risk']].setdefault(meta['asset_class'], []).append(ticker)
+    # Build the hierarchy of Nodes
+    roots: List[Node] = []
+    for risk, acs in risk_map.items():
+        ac_nodes: List[Node] = []
+        for ac, tickers in acs.items():
+            tgt = sum(sec[t]['target'] for t in tickers)
+            con = sum(sec[t]['constrained'] or 0 for t in tickers)
+            children = [Node(t, sec[t]['target'], sec[t]['constrained']) for t in tickers]
+            ac_nodes.append(Node(ac, tgt, con, children))
+        roots.append(Node(risk,
+                          sum(n.target for n in ac_nodes),
+                          sum(n.constraint for n in ac_nodes),
+                          ac_nodes))
+    # Execute the waterfall rebalance
+    waterfall_rebalance(roots)
+    # Extract allocations into a DataFrame
+    rows = []
+    for risk_node in roots:
+        for ac_node in risk_node.children:
+            for sec_node in ac_node.children:
+                rows.append({
+                    'Ticker': sec_node.name,
+                    'Allocation': round(sec_node.allocation, 2)
+                })
+    return pd.DataFrame(rows)
+
 # --- Streamlit Web App ---
-st.title("Constrained Portfolio Rebalancer")
-st.write("Upload your Excel file to see the rebalanced results.")
+st.title("Constrained Portfolio Rebalancing")
+st.write("Upload an Excel file with columns: Ticker, risk, asset_class, target, constrained.")
 
-# Optional download template
-with open("Portfolio_Template.xlsx", "rb") as f:
-    st.download_button("Download Excel Template", f, file_name="Portfolio_Template.xlsx")
+uploaded = st.file_uploader("Upload Excel file", type=["xlsx"])
+if uploaded:
+    try:
+        df = pd.read_excel(uploaded)
+        result = run_rebalance(df)
+        st.dataframe(result)
+        csv = result.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            "Download results as CSV",
+            data=csv,
+            file_name="rebalance_results.csv",
+            mime="text/csv"
+        )
+    except Exception as e:
+        st.error(f"Error processing file: {e}")
 
-uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx"])
+# --- pytest Test ---
+# To run: pytest app.py
 
-if uploaded_file:
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file, engine="openpyxl")
-
-    if not set(["Ticker", "Risk", "Asset Class", "Target", "Constraint"]).issubset(df.columns):
-        st.error("Missing required columns in the Excel file.")
-    else:
-        securities = df.set_index("Ticker").T.to_dict()
-        risk_map = {}
-        for t, m in securities.items():
-            risk_map.setdefault(m['Risk'], {}).setdefault(m['Asset Class'], []).append(t)
-
-        roots = []
-        for risk, acs in risk_map.items():
-            ac_nodes = [Node(ac,
-                             sum(securities[t]['Target'] for t in tickers),
-                             sum(securities[t]['Constraint'] or 0 for t in tickers),
-                             [Node(t, securities[t]['Target'], securities[t]['Constraint']) for t in tickers])
-                        for ac, tickers in acs.items()]
-            roots.append(Node(risk,
-                              sum(a.target for a in ac_nodes),
-                              sum(a.constraint for a in ac_nodes),
-                              ac_nodes))
-
-        waterfall_rebalance(roots)
-
-        rows = []
-        for r in roots:
-            for ac in r.children:
-                for s in ac.children:
-                    rows.append({
-                        'Ticker': s.name,
-                        'Target': round(s.target, 2),
-                        'Constraint': round(s.constraint, 2) if pd.notnull(s.constraint) else "None",
-                        'Computed Allocation': round(s.allocation, 2)
-                    })
-        result_df = pd.DataFrame(rows)
-        st.dataframe(result_df)
-        st.download_button("Download Result as CSV", result_df.to_csv(index=False), "Rebalanced_Portfolio.csv")
+def test_minimal_sample():
+    # Minimal sample from notebook
+    sample_data = [
+        {'Ticker':'DGRO','risk':'Growth','asset_class':'US Large Cap Equity','target':0,'constrained':22000},
+        {'Ticker':'IVV','risk':'Growth','asset_class':'US Large Cap Equity','target':20000,'constrained':None},
+        {'Ticker':'BND','risk':'Defensive','asset_class':'US Bonds','target':10000,'constrained':None},
+    ]
+    sample_df = pd.DataFrame(sample_data)
+    expected = {'DGRO':22000, 'IVV':0, 'BND':8000}
+    result = run_rebalance(sample_df)
+    comp = dict(zip(result['Ticker'], result['Allocation']))
+    for ticker, exp in expected.items():
+        assert comp[ticker] == exp
