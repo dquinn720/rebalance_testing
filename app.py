@@ -109,9 +109,11 @@ template_buffer = io.BytesIO()
 with pd.ExcelWriter(template_buffer, engine="openpyxl") as writer:
     template_df.to_excel(writer, index=False, sheet_name="Template")
 template_buffer.seek(0)
+# Use buffer content for download_button
+template_bytes = template_buffer.getvalue()
 st.download_button(
     "Download Excel template",
-    data=template_buffer,
+    data=template_bytes,
     file_name="rebalance_template.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
