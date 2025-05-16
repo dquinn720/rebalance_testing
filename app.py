@@ -56,7 +56,11 @@ with open("Portfolio_Template.xlsx", "rb") as f:
 uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx"])
 
 if uploaded_file:
-    df = pd.read_excel(uploaded_file)
+    if uploaded_file.name.endswith(".csv"):
+        df = pd.read_csv(uploaded_file)
+    else:
+        df = pd.read_excel(uploaded_file, engine="openpyxl")
+
 
     if not set(["Ticker", "Risk", "Asset Class", "Target", "Constraint"]).issubset(df.columns):
         st.error("Missing required columns in the Excel file.")
