@@ -7,7 +7,9 @@ class Node:
     def __init__(self, name: str, target: float, constraint: float, children: List['Node'] = None):
         self.name = name
         self.target = float(target)
+        self.original_target = self.target  # Preserve original
         self.constraint = float(constraint) if constraint is not None else 0.0
+        self.original_constraint = self.constraint  # Preserve original
         self.children = children or []
         self.allocation = 0.0
 
@@ -90,9 +92,9 @@ if uploaded_file:
                 for s in ac.children:
                     rows.append({
                         'Ticker': s.name,
-                        'Computed Allocation': round(s.allocation, 2),
-                        'Target': s.target,
-                        'Constraint': s.constraint
+                        'Target': round(s.original_target, 2),
+                        'Constraint': round(s.original_constraint, 2),
+                        'Computed Allocation': round(s.allocation, 2)
                     })
         result_df = pd.DataFrame(rows)
         st.dataframe(result_df)
