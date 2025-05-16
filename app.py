@@ -7,9 +7,7 @@ class Node:
     def __init__(self, name: str, target: float, constraint: float, children: List['Node'] = None):
         self.name = name
         self.target = float(target)
-        self.original_target = self.target
         self.constraint = float(constraint) if constraint is not None else 0.0
-        self.original_constraint = self.constraint
         self.children = children or []
         self.allocation = 0.0
 
@@ -44,10 +42,7 @@ def waterfall_rebalance(nodes: List[Node]) -> None:
         if parent.children:
             child_total = sum(c.target for c in parent.children) or 1.0
             for c in parent.children:
-                child_weight = c.target / child_total if child_total > 0 else 0
-                c_allocation = parent.allocation * child_weight
-                c.constraint = min(c.constraint, c_allocation)
-                c.target = c_allocation
+                c.target = (c.target / child_total) * parent.allocation
             waterfall_rebalance(parent.children)
 
 # --- Streamlit Web App ---
@@ -61,11 +56,7 @@ with open("Portfolio_Template.xlsx", "rb") as f:
 uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx"])
 
 if uploaded_file:
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file, engine="openpyxl")
-
+    df = pd.read_excel(uploaded_file)
 
     if not set(["Ticker", "Risk", "Asset Class", "Target", "Constraint"]).issubset(df.columns):
         st.error("Missing required columns in the Excel file.")
@@ -95,8 +86,8 @@ if uploaded_file:
                 for s in ac.children:
                     rows.append({
                         'Ticker': s.name,
-                        'Target': round(s.original_target, 2),
-                        'Constraint': round(s.original_constraint, 2),
+                        'Target': round(s.target, 2),
+                        'Constraint': round(s.constraint, 2),
                         'Computed Allocation': round(s.allocation, 2)
                     })
         result_df = pd.DataFrame(rows)
