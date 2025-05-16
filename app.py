@@ -93,8 +93,13 @@ if uploaded:
     try:
         df = pd.read_excel(uploaded)
         result = run_rebalance(df)
-        st.dataframe(result)
-        csv = result.to_csv(index=False).encode('utf-8')
+        # Merge original metadata and rename Allocation to computed
+        output_df = df[["Ticker", "risk", "asset_class", "target", "constrained"]].merge(
+            result, on="Ticker"
+        )
+        output_df = output_df.rename(columns={"Allocation": "computed"})
+        st.dataframe(output_df)
+        csv = output_df.to_csv(index=False).encode('utf-8')
         st.download_button(
             "Download results as CSV",
             data=csv,
