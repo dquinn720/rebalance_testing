@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from io import BytesIO
 from typing import List
 
 # ---  Node & Rebalance Logic ---
@@ -105,11 +106,10 @@ st.write("Upload an Excel file with columns: Ticker, risk, asset_class, target, 
 
 # Provide a downloadable template
 template_df = pd.DataFrame(columns=["Ticker", "risk", "asset_class", "target", "constrained"])
-template_buffer = io.BytesIO()
+template_buffer = BytesIO()
 with pd.ExcelWriter(template_buffer, engine="openpyxl") as writer:
     template_df.to_excel(writer, index=False, sheet_name="Template")
 template_buffer.seek(0)
-# Use buffer content for download_button
 template_bytes = template_buffer.getvalue()
 st.download_button(
     "Download Excel template",
