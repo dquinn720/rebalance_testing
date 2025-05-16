@@ -7,9 +7,9 @@ class Node:
     def __init__(self, name: str, target: float, constraint: float, children: List['Node'] = None):
         self.name = name
         self.target = float(target)
-        self.original_target = self.target  # Preserve original
+        self.original_target = self.target
         self.constraint = float(constraint) if constraint is not None else 0.0
-        self.original_constraint = self.constraint  # Preserve original
+        self.original_constraint = self.constraint
         self.children = children or []
         self.allocation = 0.0
 
@@ -44,7 +44,10 @@ def waterfall_rebalance(nodes: List[Node]) -> None:
         if parent.children:
             child_total = sum(c.target for c in parent.children) or 1.0
             for c in parent.children:
-                c.target = (c.target / child_total) * parent.allocation
+                child_weight = c.target / child_total if child_total > 0 else 0
+                c_allocation = parent.allocation * child_weight
+                c.constraint = min(c.constraint, c_allocation)
+                c.target = c_allocation
             waterfall_rebalance(parent.children)
 
 # --- Streamlit Web App ---
