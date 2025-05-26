@@ -320,16 +320,17 @@ if uploaded is not None:
             holding_sum = out_df['Holding'].sum()
             alloc_sum = out_df['Allocation'].sum()
             trade_sum = out_df['Trade'].sum()
+            target_sum = out_df['Target'].sum()
             summary = pd.DataFrame({
-                'Metric': ['Holding','Cash','Allocation','Trade'],
-                'Value': [holding_sum, cash, alloc_sum, trade_sum]
+                'Metric': ['Target', 'Holding','Cash','Allocation','Trade'],
+                'Value': [target_sum, holding_sum, cash, alloc_sum, trade_sum]
             })
             st.write("### Summary")
             st.table(summary)
             
             # Visuals
             st.write("### Weight by Risk (%)")
-            risk_df = out_df.groupby('risk')[['Target','Holding','Allocation']].sum()
+            risk_df = out_df.groupby('Risk')[['Target','Holding','Allocation']].sum()
             total_alloc = alloc_sum if alloc_sum else 1
             pct_risk = risk_df.div(total_alloc) * 100
             fig, ax = plt.subplots()
