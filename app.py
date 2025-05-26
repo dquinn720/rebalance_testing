@@ -305,6 +305,7 @@ if uploaded is not None:
             out_df = pd.DataFrame(output)
             # Ensure grouping columns
             out_df = out_df.set_index('Ticker')
+            out_df = out_df.sort_values(by=['Risk','Asset Class','Target'], ascending=[True, True, False]) 
 
             st.dataframe(out_df)
             csv = out_df.to_csv(index=False).encode('utf-8')
@@ -316,14 +317,14 @@ if uploaded is not None:
             )
             # Visuals
             st.write("### Weight by Risk")
-            risk_df = out_df.groupby('risk')[['Target','Holding','Allocation']].sum()
+            risk_df = out_df.groupby('Risk')[['Target','Holding','Allocation']].sum()
             st.bar_chart(risk_df)
             st.write("### Weight by Asset Class")
-            ac_df = out_df.groupby('asset_class')[['Target','Holding','Allocation']].sum()
+            ac_df = out_df.groupby('Asset Class')[['Target','Holding','Allocation']].sum()
             st.bar_chart(ac_df)
             
             st.write("### Weight by Ticker (grouped by Risk and Asset Class)")
-            ticker_df = out_df.sort_values(['risk','asset_class','Ticker'])
+            ticker_df = out_df.sort_values(['Risk','Asset Class','Ticker'])
             ticker_df = ticker_df.set_index('Ticker')[['Target','Holding','Allocation']]
             st.bar_chart(ticker_df)
     except Exception as e:
