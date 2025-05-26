@@ -188,7 +188,7 @@ def sell_only_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
 
 # --- Streamlit App ---
 st.title("Constrained Portfolio Rebalancing")
-st.write("Upload a CSV or Excel file with columns: Ticker, risk, asset_class, target (in %), constrained (in $), holding (in $).")
+st.write("Upload a CSV or Excel file with columns: Ticker, risk, asset_class, target (in %), constrained (in dollars), holding (in dollars).")
 
 # Downloadable template
 cols = ["Ticker", "risk", "asset_class", "target (in %)", "constrained (in $)", "holding (in $)"]
