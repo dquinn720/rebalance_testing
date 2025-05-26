@@ -303,7 +303,7 @@ if uploaded is not None:
             else:
                 output = buy_only_rebalance(input_dict, cash)
             out_df = pd.DataFrame(output)
-            orig = df[['Ticker', 'target']].rename(columns={'target': 'Input Target'})
+            orig = df[['Ticker', 'target (in %)']].rename(columns={'target (in %)': 'Input Target'})
             out_df = out_df.merge(orig, on='Ticker')
             # Ensure grouping columns
             out_df = out_df.set_index('Ticker')
