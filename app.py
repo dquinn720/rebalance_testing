@@ -18,25 +18,33 @@ class Node:
         return f"Node({self.name}, {self.target}, {self.constraint}, {self.holding}, alloc={self.allocation})"
 
 
-def build_hierarchy(df_dict: dict) -> List[Node]:
-    # Build nodes grouped by risk and asset_class
-    sec = df_dict
-    risk_map = {}
-    for ticker, meta in sec.items():
-        risk_map.setdefault(meta['risk'], {}).setdefault(meta['asset_class'], []).append(ticker)
-    roots = []
-    for risk, acs in risk_map.items():
+def build_hierarchy(data: dict):
+    by_risk = {}
+    for sec, info in data.items():
+        risk = info['risk']
+        asset_class = info['asset_class']
+        sec_node = Node(sec, info['target'], info.get('constrained', None), info.get('holding', None))
+        if risk not in by_risk:
+            by_risk[risk] = {}
+        if asset_class not in by_risk[risk]:
+            by_risk[risk][asset_class] = []
+        by_risk[risk][asset_class].append(sec_node)
+    risk_nodes = []
+    for risk, ac_dict in by_risk.items():
         ac_nodes = []
-        for ac, tickers in acs.items():
-            tgt = sum(sec[t]['target'] for t in tickers)
-            con = sum(sec[t].get('constrained', 0) or 0 for t in tickers)
-            children = [Node(t, sec[t]['target'], sec[t].get('constrained'), sec[t].get('holding')) for t in tickers]
-            ac_nodes.append(Node(ac, tgt, con, None, children))
-        total_tgt = sum(n.target for n in ac_nodes)
-        total_con = sum(n.constraint for n in ac_nodes)
-        roots.append(Node(risk, total_tgt, total_con, None, ac_nodes))
-    return roots
+        for ac, sec_nodes in ac_dict.items():
+            target = sum(s.target for s in sec_nodes)
+            constraint = sum(s.constraint for s in sec_nodes)
+            holding = sum(s.holding for s in sec_nodes)
+            ac_nodes.append(Node(ac, target, constraint, holding, children=sec_nodes))
+        target = sum(a.target for a in ac_nodes)
+        constraint = sum(a.constraint for a in ac_nodes)
+        holding = sum(a.holding for a in ac_nodes)
+        risk_nodes.append(Node(risk, target, constraint, holding, children=ac_nodes))
+    return risk_nodes
 
+
+## 2. Proportional Cascading Overshoot Waterfall Algorithm
 
 def proportional_cascading_overshoot(nodes: List[Node], overshoot: float):
     eligible = [n for n in nodes if n.constraint < n.target]
@@ -45,10 +53,10 @@ def proportional_cascading_overshoot(nodes: List[Node], overshoot: float):
         next_eligible = []
         redistributed = 0.0
         for n in eligible:
-            reduction = overshoot * (n.target / sum_targets) if sum_targets else 0
+            reduction = overshoot * (n.target / sum_targets) if sum_targets > 0 else 0
             new_alloc = n.allocation - reduction
             if new_alloc < n.constraint:
-                redistributed += (n.constraint - new_alloc)
+                redistributed += n.constraint - new_alloc
                 n.allocation = n.constraint
             else:
                 n.allocation = new_alloc
@@ -56,37 +64,99 @@ def proportional_cascading_overshoot(nodes: List[Node], overshoot: float):
         overshoot = redistributed
         eligible = next_eligible
 
+def waterfall_with_min_constraint(nodes: List[Node]) -> None:
+    total_target     = sum(n.target     for n in nodes)
+    total_constraint = sum(n.constraint for n in nodes)
+    extra = total_target - total_constraint
+    overshoot_total = sum(max(n.constraint - n.target, 0.0) for n in nodes)
+    if overshoot_total > 0 and extra > 0:
+        for n in nodes:
+            if n.constraint > n.target:
+                n.allocation = n.constraint
+            else:
+                n.allocation = n.target
+        proportional_cascading_overshoot(nodes, overshoot_total)
+    elif extra > 0:
+        head_nodes = [n for n in nodes if n.constraint < n.target]
+        head_sum   = sum(n.target - n.constraint for n in head_nodes)
+        for n in nodes:
+            if n.constraint >= n.target:
+                n.allocation = n.constraint
+            else:
+                n.allocation = n.constraint + ((n.target - n.constraint) * (extra / head_sum) if head_sum else 0)
+    else:
+        for n in nodes:
+            n.allocation = n.constraint
+    for parent in nodes:
+        if parent.children:
+            child_total = sum(c.target for c in parent.children) or 1.0
+            for c in parent.children:
+                c.target = (c.target / child_total) * parent.allocation if child_total else 0
+            waterfall_with_min_constraint(parent.children)
 
-def improved_waterfall_rebalance(nodes: List[Node]) -> None:
-    total_target = sum(n.target for n in nodes)
-    total_con = sum(n.constraint for n in nodes)
-    extra = total_target - total_con
-    # initial allocation
+
+def waterfall_with_max_constraint(
+    nodes: List[Node],
+    parent_alloc: Optional[float] = None,
+    tol: float = 1e-6
+) -> None:
+    """
+    1) Scale each node’s target to sum to `parent_alloc`
+    2) Cap at each node’s holding
+    3) Redistribute any “over-caps” among those with spare capacity
+    4) Recurse into children with each node’s final allocation
+    """
+    # 1) decide how much to split
+    level_target = parent_alloc if parent_alloc is not None else sum(n.target for n in nodes)
+    sum_tgts      = sum(n.target for n in nodes) or 1.0
+
+    # Scale
     for n in nodes:
-        n.allocation = n.constraint if n.constraint >= n.target else n.target
-    # cascade overshoot
-    if extra > 0:
-        overshoot = sum(max(n.constraint - n.target, 0) for n in nodes)
-        if overshoot > 0:
-            proportional_cascading_overshoot(nodes, overshoot)
-    # recurse
-    for p in nodes:
-        if p.children:
-            child_total = sum(c.target for c in p.children) or 1
-            for c in p.children:
-                c.target = c.target / child_total * p.allocation
-            improved_waterfall_rebalance(p.children)
+        n.allocation = (n.target / sum_tgts) * level_target
 
+    # Cap & collect removed
+    removed = 0.0
+    for n in nodes:
+        if n.allocation > n.holding:
+            removed        += (n.allocation - n.holding)
+            n.allocation   = n.holding
 
-def collect_leaf_allocations(nodes: List[Node], res=None):
-    if res is None:
-        res = {}
+    # Redistribute removed to any sibling with capacity
+    fill      = removed
+    eligible  = [n for n in nodes if n.allocation < n.holding]
+    while fill > tol and eligible:
+        caps    = [n.holding - n.allocation for n in eligible]
+        cap_sum = sum(caps) or 1.0
+        new_el  = []
+        leftover = 0.0
+
+        for n, cap in zip(eligible, caps):
+            add = fill * (cap / cap_sum)
+            if n.allocation + add > n.holding:
+                leftover    += (n.allocation + add) - n.holding
+                n.allocation = n.holding
+            else:
+                n.allocation += add
+                new_el.append(n)
+
+        fill     = leftover
+        eligible = new_el
+
+    # 4) recurse
     for n in nodes:
         if n.children:
-            collect_leaf_allocations(n.children, res)
+            waterfall_with_max_constraint(n.children, parent_alloc=n.allocation, tol=tol)
+
+
+def collect_leaf_allocations(nodes, results=None):
+    if results is None:
+        results = {}
+    for n in nodes:
+        if n.children:
+            collect_leaf_allocations(n.children, results)
         else:
-            res[n.name] = round(n.allocation, 2)
-    return res
+            results[n.name] = round(n.allocation, 2)
+    return results
 
 
 def targets_pct_to_dollars(data_dict: dict, cash: float = 0) -> dict:
@@ -103,30 +173,30 @@ def targets_pct_to_dollars(data_dict: dict, cash: float = 0) -> dict:
     return new
 
 
-def full_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
-    data = targets_pct_to_dollars(input_dict, cash)
+def full_rebalance(input_dict,cash=0):
+    data = targets_pct_to_dollars(input_dict,cash)
     tree = build_hierarchy(data)
-    improved_waterfall_rebalance(tree)
-    allocs = collect_leaf_allocations(tree)
-    out = []
-    for t, m in data.items():
-        out.append({
-            'Ticker': t,
-            'risk': m['risk'],
-            'asset_class': m['asset_class'],
-            'Target': m['target'],
-            'Constrained': m.get('constrained'),
-            'Holding': m.get('holding'),
-            'Allocation': allocs.get(t, 0),
-            'Trade': round(allocs.get(t, 0) - (m.get('holding') or 0), 2)
+    waterfall_with_min_constraint(tree)
+    allocations = collect_leaf_allocations(tree)
+    output = []
+    for ticker, meta in data.items():
+        output.append({
+            "Ticker": ticker,
+            "Risk": meta["risk"],
+            "Asset Class": meta["asset_class"],
+            "Target": meta.get("target"),
+            "Constrained": meta.get("constrained"),
+            "Allocation": round(allocations.get(ticker, 0.0), 2),
+            "Holding": meta.get("holding"),
+            "Trade": round(allocations.get(ticker, 0.0) - (meta.get("holding") or 0.0), 2)
         })
-    return sorted(out, key=lambda x: x['Ticker'])
+    return sorted(output, key=lambda x: x["Ticker"])
 
 
 def buy_only_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
     data = targets_pct_to_dollars(input_dict, cash)
     tree = build_hierarchy(data)
-    improved_waterfall_rebalance(tree)
+    waterfall_with_min_constraint(tree)
     first = collect_leaf_allocations(tree)
     second_input = {}
     for t, m in data.items():
@@ -138,14 +208,14 @@ def buy_only_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
             'holding': m.get('holding')
         }
     tree2 = build_hierarchy(second_input)
-    improved_waterfall_rebalance(tree2)
+    waterfall_with_min_constraint(tree2)
     second = collect_leaf_allocations(tree2)
     out = []
     for t, m in second_input.items():
         out.append({
             'Ticker': t,
-            'risk': m['risk'],
-            'asset_class': m['asset_class'],
+            'Risk': m['risk'],
+            'Asset Class': m['asset_class'],
             'Target': m['target'],
             'Constrained': m.get('constrained'),
             'Holding': m.get('holding'),
@@ -158,7 +228,7 @@ def buy_only_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
 def sell_only_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
     data = targets_pct_to_dollars(input_dict, cash)
     tree = build_hierarchy(data)
-    improved_waterfall_rebalance(tree)
+    waterfall_with_min_constraint(tree)
     first = collect_leaf_allocations(tree)
     second_input = {}
     for t, m in data.items():
@@ -170,14 +240,14 @@ def sell_only_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
             'holding': m.get('holding')
         }
     tree2 = build_hierarchy(second_input)
-    improved_waterfall_rebalance(tree2)
+    waterfall_with_max_constraint(tree2)
     second = collect_leaf_allocations(tree2)
     out = []
     for t, m in second_input.items():
         out.append({
             'Ticker': t,
-            'risk': m['risk'],
-            'asset_class': m['asset_class'],
+            'Risk': m['risk'],
+            'Asset Class': m['asset_class'],
             'Target': m['target'],
             'Constrained': m.get('constrained'),
             'Holding': m.get('holding'),
