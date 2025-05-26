@@ -188,10 +188,10 @@ def sell_only_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
 
 # --- Streamlit App ---
 st.title("Constrained Portfolio Rebalancing")
-st.write("Upload a CSV or Excel file with columns: Ticker, risk, asset_class, target, constrained, holding.")
+st.write("Upload a CSV or Excel file with columns: Ticker, risk, asset_class, target (in %), constrained (in $), holding (in $).")
 
 # Downloadable template
-cols = ["Ticker", "risk", "asset_class", "target", "constrained", "holding"]
+cols = ["Ticker", "risk", "asset_class", "target (in %)", "constrained (in $)", "holding (in $)"]
 template_df = pd.DataFrame(columns=cols)
 template_buffer = BytesIO()
 with pd.ExcelWriter(template_buffer, engine="openpyxl") as writer:
@@ -219,9 +219,9 @@ if uploaded is not None:
             row['Ticker']: {
                 'risk': row['risk'],
                 'asset_class': row['asset_class'],
-                'target': row['target'],
-                'constrained': row.get('constrained'),
-                'holding': row.get('holding', 0)
+                'target': row['target (in %)'],
+                'constrained': row.get('constrained (in $)', 0),
+                'holding': row.get('holding (in $)', 0)
             }
             for _, row in df.iterrows()
         }
