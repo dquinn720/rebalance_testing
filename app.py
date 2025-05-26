@@ -305,8 +305,6 @@ if uploaded is not None:
             out_df = pd.DataFrame(output)
             # Ensure grouping columns
             out_df = out_df.set_index('Ticker')
-            meta = df[['Ticker','risk','asset_class']].set_index('Ticker')
-            out_df = out_df.join(meta).reset_index()
 
             st.dataframe(out_df)
             csv = out_df.to_csv(index=False).encode('utf-8')
