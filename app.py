@@ -335,9 +335,9 @@ if uploaded is not None:
             risk_df = out_df.groupby('Risk')[['Input Target','Holding','Allocation']].sum()
             total_alloc = alloc_sum if alloc_sum else 1
             pct_risk = pd.DataFrame({
+                'Allocation': risk_df['Allocation'] / alloc_sum * 100,
                 'Target': risk_df['Input Target'] * 100,
-                'Holding': risk_df['Holding'] / holding_sum * 100,
-                'Allocation': risk_df['Allocation'] / alloc_sum * 100
+                'Holding': risk_df['Holding'] / holding_sum * 100
             })
             fig, ax = plt.subplots()
             pct_risk.plot.barh(ax=ax)
@@ -347,9 +347,9 @@ if uploaded is not None:
             st.write("### Weight by Asset Class (%)")
             ac_df = out_df.groupby('Asset Class')[['Input Target','Holding','Allocation']].sum()
             pct_ac = pd.DataFrame({
+                'Allocation': ac_df['Allocation'] / alloc_sum * 100,
                 'Target': ac_df['Input Target']  * 100,
-                'Holding': ac_df['Holding'] / holding_sum * 100,
-                'Allocation': ac_df['Allocation'] / alloc_sum * 100
+                'Holding': ac_df['Holding'] / holding_sum * 100
             })
             fig2, ax2 = plt.subplots()
             pct_ac.plot.barh(ax=ax2)
