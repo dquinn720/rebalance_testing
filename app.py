@@ -303,6 +303,8 @@ if uploaded is not None:
             else:
                 output = buy_only_rebalance(input_dict, cash)
             out_df = pd.DataFrame(output)
+            orig = df[['Ticker', 'target']].rename(columns={'target': 'Input Target'})
+            out_df = out_df.merge(orig, on='Ticker')
             # Ensure grouping columns
             out_df = out_df.set_index('Ticker')
             out_df = out_df.sort_values(by=['Risk','Asset Class','Target'], ascending=[True, True, False]) 
@@ -330,10 +332,10 @@ if uploaded is not None:
             
             # Visuals
             st.write("### Weight by Risk (%)")
-            risk_df = out_df.groupby('Risk')[['Target','Holding','Allocation']].sum()
+            risk_df = out_df.groupby('Risk')[['Input Target','Holding','Allocation']].sum()
             total_alloc = alloc_sum if alloc_sum else 1
             pct_risk = pd.DataFrame({
-                'Target': risk_df['Target'] / target_sum * 100,
+                'Target': risk_df['Input Target'] * 100,
                 'Holding': risk_df['Holding'] / holding_sum * 100,
                 'Allocation': risk_df['Allocation'] / alloc_sum * 100
             })
@@ -343,9 +345,9 @@ if uploaded is not None:
             st.pyplot(fig)
 
             st.write("### Weight by Asset Class (%)")
-            ac_df = out_df.groupby('Asset Class')[['Target','Holding','Allocation']].sum()
+            ac_df = out_df.groupby('Asset Class')[['Input Target','Holding','Allocation']].sum()
             pct_ac = pd.DataFrame({
-                'Target': ac_df['Target'] / target_sum * 100,
+                'Target': ac_df['Input Target']  * 100,
                 'Holding': ac_df['Holding'] / holding_sum * 100,
                 'Allocation': ac_df['Allocation'] / alloc_sum * 100
             })
