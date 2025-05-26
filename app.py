@@ -315,17 +315,42 @@ if uploaded is not None:
                 file_name="rebalance_results.csv",
                 mime="text/csv"
             )
-            # Visuals
-            st.write("### Weight by Risk")
-            risk_df = out_df.groupby('Risk')[['Target','Holding','Allocation']].sum()
-            st.bar_chart(risk_df)
-            st.write("### Weight by Asset Class")
-            ac_df = out_df.groupby('Asset Class')[['Target','Holding','Allocation']].sum()
-            st.bar_chart(ac_df)
             
-            st.write("### Weight by Ticker (grouped by Risk and Asset Class)")
-            ticker_df = out_df.sort_values(['Risk','Asset Class','Ticker'])
-            ticker_df = ticker_df.set_index('Ticker')[['Target','Holding','Allocation']]
-            st.bar_chart(ticker_df)
+            # Summary table
+            holding_sum = out_df['Holding'].sum()
+            alloc_sum = out_df['Allocation'].sum()
+            trade_sum = out_df['Trade'].sum()
+            summary = pd.DataFrame({
+                'Metric': ['Holding','Cash','Allocation','Trade'],
+                'Value': [holding_sum, cash, alloc_sum, trade_sum]
+            })
+            st.write("### Summary")
+            st.table(summary)
+            
+            # Visuals
+            st.write("### Weight by Risk (%)")
+            risk_df = out_df.groupby('risk')[['Target','Holding','Allocation']].sum()
+            total_alloc = alloc_sum if alloc_sum else 1
+            pct_risk = risk_df.div(total_alloc) * 100
+            fig, ax = plt.subplots()
+            pct_risk.plot.barh(ax=ax)
+            ax.set_xlabel('Percent of Total Allocation')
+            st.pyplot(fig)
+
+            st.write("### Weight by Asset Class (%)")
+            ac_df = out_df.groupby('asset_class')[['Target','Holding','Allocation']].sum()
+            pct_ac = ac_df.div(total_alloc) * 100
+            fig2, ax2 = plt.subplots()
+            pct_ac.plot.barh(ax=ax2)
+            ax2.set_xlabel('Percent of Total Allocation')
+            st.pyplot(fig2)
+
+            st.write("### Weight by Ticker (%)")
+            ticker_df = out_df.sort_values(['risk','asset_class','Ticker'])
+            ticker_pct = ticker_df.set_index('Ticker')[['Target','Holding','Allocation']].div(total_alloc) * 100
+            fig3, ax3 = plt.subplots()
+            ticker_pct.plot.barh(ax=ax3)
+            ax3.set_xlabel('Percent of Total Allocation')
+            st.pyplot(fig3)
     except Exception as e:
         st.error(f"Error processing file: {e}")
