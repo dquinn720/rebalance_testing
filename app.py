@@ -199,7 +199,7 @@ def full_rebalance(input_dict):
     return sorted(output, key=lambda x: x["Ticker"])
 
 
-def buy_only_rebalance(input_dict: dict) -> List[dict]:
+def use_cash(input_dict: dict) -> List[dict]:
     data = targets_pct_to_dollars(input_dict)
     tree = build_hierarchy(data)
     waterfall_with_min_constraint(tree)
@@ -231,7 +231,7 @@ def buy_only_rebalance(input_dict: dict) -> List[dict]:
     return sorted(out, key=lambda x: x['Ticker'])
 
 
-def sell_only_rebalance(input_dict: dict) -> List[dict]:
+def raise_cash(input_dict: dict) -> List[dict]:
     data = targets_pct_to_dollars(input_dict)
     tree = build_hierarchy(data)
     waterfall_with_min_constraint(tree)
@@ -326,18 +326,17 @@ if uploaded is not None:
             if operation == "Full Rebalance":
                 output = full_rebalance(input_dict)
             elif operation == "Raise Cash (Sell Only)":
-                output = sell_only_rebalance(input_dict)
+                output = raise_cash(input_dict)
             else:
-                output = buy_only_rebalance(input_dict)
+                output = use_cash(input_dict)
             out_df = pd.DataFrame(output)
             orig = df[['Ticker', 'target (in %)']].rename(columns={'target (in %)': 'Input Target'})
-            out_df = out_df.merge(orig, on='Ticker')
+            out_df = out_df.merge(orig, on='Ticker', how='left')
             # Ensure grouping columns
             out_df = out_df.set_index('Ticker')
             out_df = out_df.sort_values(by=['Risk','Asset Class','Target'], ascending=[True, True, False]) 
 
             st.dataframe(out_df)
-            st.dataframe(input_dict)
             csv = out_df.to_csv(index=True).encode('utf-8')
             st.download_button(
                 "Download results as CSV",
