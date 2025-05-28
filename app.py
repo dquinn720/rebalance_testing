@@ -330,7 +330,6 @@ if uploaded is not None:
             else:
                 output = use_cash(input_dict)
             out_df = pd.DataFrame(output)
-            st.dataframe(out_df)
             
             orig = df[['Ticker', 'target (in %)']].rename(columns={'target (in %)': 'Input Target'})
             out_df = out_df.merge(orig, on='Ticker', how='left')
