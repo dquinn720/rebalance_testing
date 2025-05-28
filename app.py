@@ -98,7 +98,7 @@ def waterfall_with_min_constraint(nodes: List[Node]) -> None:
 def waterfall_with_max_constraint(
     nodes: List[Node],
     parent_alloc: Optional[float] = None,
-    tol: decimal = 1e-6
+    tol: float = 1e-6
 ) -> None:
     # 1. Allocate proportionally to target
     level_target = parent_alloc if parent_alloc is not None else sum(n.target for n in nodes)
