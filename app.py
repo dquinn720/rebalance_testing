@@ -264,6 +264,8 @@ def sell_only_rebalance(input_dict: dict) -> List[dict]:
     total_trade = sum(item.get('Trade', 0) for item in out)
     out.append({
         "Ticker": 'CASH-TRADE',
+        'Risk': 'Cash',
+        'Asset Class': 'Cash',
         "Target": input_dict['CASH-TRADE']['target'],
         "Constrained": input_dict['CASH-TRADE']['constrained'],
         "Holding": input_dict['CASH-TRADE']['holding'],
@@ -312,14 +314,14 @@ if uploaded is not None:
             for _, row in df.iterrows()
         }
         if cash > 0:
-            input_dict['CASH-TRADE'] = {'risk': 'Defensive', 'asset_class': 'Cash', 'target':0, 'constrained': 0, 'holding':cash}
+            input_dict['CASH-TRADE'] = {'risk': 'Cash', 'asset_class': 'Cash', 'target':0, 'constrained': 0, 'holding':cash}
         elif cash < 0:
             holding_sum = sum(i['holding'] for i in input_dict.values())
             cash_weight = -1 * cash / holding_sum
             securities_weight = 1 - cash_weight
             for k,v in input_dict.items():
                 v['target'] = v['target'] * securities_weight
-            input_dict['CASH-TRADE'] = {'risk': 'Defensive', 'asset_class': 'Cash', 'target': cash_weight, 'constrained': cash_weight, 'holding':0} 
+            input_dict['CASH-TRADE'] = {'risk': 'Cash', 'asset_class': 'Cash', 'target': cash_weight, 'constrained': cash_weight, 'holding':0} 
         if st.button("Run"):
             if operation == "Full Rebalance":
                 output = full_rebalance(input_dict)
