@@ -264,13 +264,13 @@ def raise_cash(input_dict: dict) -> List[dict]:
     total_trade = sum(item.get('Trade', 0) for item in out)
     out.append({
         "Ticker": 'CASH-TRADE',
-        "Risk": input_dict['CASH-TRADE']['risk'],
-        "Asset Class": input_dict['CASH-TRADE']['asset_class'],
-        "Target": input_dict['CASH-TRADE']['target'],
-        "Constrained": input_dict['CASH-TRADE']['constrained'],
-        "Holding": input_dict['CASH-TRADE']['holding'],
-        "Allocation": input_dict['CASH-TRADE']['holding'] - total_trade,
-        "Trade":  input_dict['CASH-TRADE']['holding'] - total_trade - input_dict['CASH-TRADE']['holding'],
+        "Risk": data['CASH-TRADE']['risk'],
+        "Asset Class": data['CASH-TRADE']['asset_class'],
+        "Target": data['CASH-TRADE']['target'],
+        "Constrained": data['CASH-TRADE']['constrained'],
+        "Holding": data['CASH-TRADE']['holding'],
+        "Allocation": data['CASH-TRADE']['holding'] - total_trade,
+        "Trade":  data['CASH-TRADE']['holding'] - total_trade - data['CASH-TRADE']['holding'],
         })
     return sorted(out, key=lambda x: x['Ticker'])
 
@@ -321,7 +321,7 @@ if uploaded is not None:
             securities_weight = 1 - cash_weight
             for k,v in input_dict.items():
                 v['target'] = v['target'] * securities_weight
-            input_dict['CASH-TRADE'] = {'risk': 'Cash', 'asset_class': 'Cash', 'target': cash_weight, 'constrained': cash_weight, 'holding':0} 
+            input_dict['CASH-TRADE'] = {'risk': 'Cash', 'asset_class': 'Cash', 'target': cash_weight, 'constrained': -1*cash, 'holding':0} 
         if st.button("Run"):
             if operation == "Full Rebalance":
                 output = full_rebalance(input_dict)
