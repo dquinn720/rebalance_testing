@@ -96,53 +96,59 @@ def waterfall_with_min_constraint(nodes: List[Node]) -> None:
 
 
 def waterfall_with_max_constraint(
-    nodes: List[Node],
+nodes: List[Node],
     parent_alloc: Optional[float] = None,
     tol: float = 1e-6
 ) -> None:
-    """
-    1) Scale each node’s target to sum to `parent_alloc`
-    2) Cap at each node’s holding
-    3) Redistribute any “over-caps” among those with spare capacity
-    4) Recurse into children with each node’s final allocation
-    """
-    # 1) decide how much to split
+    # 1. Allocate proportionally to target
     level_target = parent_alloc if parent_alloc is not None else sum(n.target for n in nodes)
-    sum_tgts      = sum(n.target for n in nodes) or 1.0
+    sum_tgts = sum(n.target for n in nodes) or 1.0
 
-    # Scale
     for n in nodes:
-        n.allocation = (n.target / sum_tgts) * level_target
+        n.allocation = (n.target / sum_tgts) * level_target if sum_tgts > 0 else 0
 
-    # Cap & collect removed
+    # 2. Cap at holding, track excess
     removed = 0.0
     for n in nodes:
         if n.allocation > n.holding:
-            removed        += (n.allocation - n.holding)
-            n.allocation   = n.holding
+            removed += (n.allocation - n.holding)
+            n.allocation = n.holding
 
-    # Redistribute removed to any sibling with capacity
-    fill      = removed
-    eligible  = [n for n in nodes if n.allocation < n.holding]
-    while fill > tol and eligible:
-        caps    = [n.holding - n.allocation for n in eligible]
-        cap_sum = sum(caps) or 1.0
-        new_el  = []
-        leftover = 0.0
-
-        for n, cap in zip(eligible, caps):
-            add = fill * (cap / cap_sum)
-            if n.allocation + add > n.holding:
-                leftover    += (n.allocation + add) - n.holding
-                n.allocation = n.holding
-            else:
+    # 3. Redistribute excess, first by targets, then by available capacity if needed
+    fill = removed
+    while fill > tol:
+        eligible = [n for n in nodes if n.target > 0 and n.allocation < n.holding]
+        if not eligible:
+            # No eligible by target, fallback to anyone with capacity
+            eligible = [n for n in nodes if n.allocation < n.holding]
+        if not eligible:
+            break  # Nowhere to go
+        if sum(n.target for n in eligible) > 0:
+            sum_targets = sum(n.target for n in eligible)
+            distributed = 0.0
+            for n in eligible:
+                room = n.holding - n.allocation
+                fair_share = fill * (n.target / sum_targets)
+                add = min(room, fair_share)
                 n.allocation += add
-                new_el.append(n)
+                distributed += add
+            fill -= distributed
+            if distributed < tol:
+                break
+        else:
+            # All eligible have target = 0, share by headroom
+            sum_caps = sum(n.holding - n.allocation for n in eligible) or 1.0
+            distributed = 0.0
+            for n in eligible:
+                cap = n.holding - n.allocation
+                add = min(fill * (cap / sum_caps), cap)
+                n.allocation += add
+                distributed += add
+            fill -= distributed
+            if distributed < tol:
+                break
 
-        fill     = leftover
-        eligible = new_el
-
-    # 4) recurse
+    # 4. Recurse
     for n in nodes:
         if n.children:
             waterfall_with_max_constraint(n.children, parent_alloc=n.allocation, tol=tol)
