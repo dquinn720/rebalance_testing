@@ -96,9 +96,9 @@ def waterfall_with_min_constraint(nodes: List[Node]) -> None:
 
 
 def waterfall_with_max_constraint(
-nodes: List[Node],
+    nodes: List[Node],
     parent_alloc: Optional[float] = None,
-    tol: float = 1e-6
+    tol: decimal = 1e-6
 ) -> None:
     # 1. Allocate proportionally to target
     level_target = parent_alloc if parent_alloc is not None else sum(n.target for n in nodes)
@@ -165,12 +165,12 @@ def collect_leaf_allocations(nodes, results=None):
     return results
 
 
-def targets_pct_to_dollars(data_dict: dict, cash: float = 0) -> dict:
-    total_holding = sum(float(meta.get('holding') or 0) for meta in data_dict.values()) + cash
+def targets_pct_to_dollars(data_dict: dict) -> dict:
+    total_holding = sum(decimal(meta.get('holding') or 0) for meta in data_dict.values())
     new = {}
     for t, meta in data_dict.items():
         m = meta.copy()
-        tgt = float(meta.get('target') or 0)
+        tgt = decimal(meta.get('target') or 0)
         if 0 <= tgt <= 1:
             m['target'] = round(tgt * total_holding, 2)
         else:
@@ -179,8 +179,8 @@ def targets_pct_to_dollars(data_dict: dict, cash: float = 0) -> dict:
     return new
 
 
-def full_rebalance(input_dict,cash=0):
-    data = targets_pct_to_dollars(input_dict,cash)
+def full_rebalance(input_dict):
+    data = targets_pct_to_dollars(input_dict)
     tree = build_hierarchy(data)
     waterfall_with_min_constraint(tree)
     allocations = collect_leaf_allocations(tree)
@@ -199,8 +199,8 @@ def full_rebalance(input_dict,cash=0):
     return sorted(output, key=lambda x: x["Ticker"])
 
 
-def buy_only_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
-    data = targets_pct_to_dollars(input_dict, cash)
+def buy_only_rebalance(input_dict: dict) -> List[dict]:
+    data = targets_pct_to_dollars(input_dict)
     tree = build_hierarchy(data)
     waterfall_with_min_constraint(tree)
     first = collect_leaf_allocations(tree)
@@ -231,20 +231,21 @@ def buy_only_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
     return sorted(out, key=lambda x: x['Ticker'])
 
 
-def sell_only_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
-    data = targets_pct_to_dollars(input_dict, cash)
+def sell_only_rebalance(input_dict: dict) -> List[dict]:
+    data = targets_pct_to_dollars(input_dict)
     tree = build_hierarchy(data)
     waterfall_with_min_constraint(tree)
     first = collect_leaf_allocations(tree)
     second_input = {}
     for t, m in data.items():
-        second_input[t] = {
-            'risk': m['risk'],
-            'asset_class': m['asset_class'],
-            'target': first.get(t, 0),
-            'constrained': m.get('constrained'),
-            'holding': m.get('holding')
-        }
+        if ticker != 'CASH-TRADE':
+            second_input[t] = {
+                'risk': m['risk'],
+                'asset_class': m['asset_class'],
+                'target': first.get(t, 0),
+                'constrained': m.get('constrained'),
+                'holding': m.get('holding')
+            }
     tree2 = build_hierarchy(second_input)
     waterfall_with_max_constraint(tree2)
     second = collect_leaf_allocations(tree2)
@@ -259,6 +260,15 @@ def sell_only_rebalance(input_dict: dict, cash: float = 0) -> List[dict]:
             'Holding': m.get('holding'),
             'Allocation': second.get(t, 0),
             'Trade': round(second.get(t, 0) - (m.get('holding') or 0), 2)
+        })
+    total_trade = sum(item.get('Trade', 0) for item in out)
+    out.append({
+        "Ticker": 'CASH-TRADE',
+        "Target": input_dict['CASH-TRADE']['target'],
+        "Constrained": input_dict['CASH-TRADE']['constrained'],
+        "Holding": input_dict['CASH-TRADE']['holding'],
+        "Allocation": input_dict['CASH-TRADE']['holding'] - total_trade,
+        "Trade":  input_dict['CASH-TRADE']['holding'] - total_trade - input_dict['CASH-TRADE']['holding'],
         })
     return sorted(out, key=lambda x: x['Ticker'])
 
@@ -300,14 +310,22 @@ if uploaded is not None:
                 'holding': row.get('holding (in $)', 0)
             }
             for _, row in df.iterrows()
-        }
+        if cash > 0:
+            input_dict['CASH-TRADE'] = {'risk': 'Defensive', 'asset_class': 'Cash', 'target':0, 'constrained': 0, 'holding':cash}
+        elif cash < 0:
+            holding_sum = sum(i['holding'] for i in input_dict.values())
+            cash_weight = -1 * cash / holding_sum
+            securities_weight = 1 - cash_weight
+            for k,v in input_dict.items():
+                v['target'] = v['target'] * securities_weight
+            input_dict['CASH-TRADE'] = {'risk': 'Defensive', 'asset_class': 'Cash', 'target': cash_weight, 'constrained': cash_weight, 'holding':0} 
         if st.button("Run"):
             if operation == "Full Rebalance":
-                output = full_rebalance(input_dict, cash)
+                output = full_rebalance(input_dict)
             elif operation == "Raise Cash (Sell Only)":
-                output = sell_only_rebalance(input_dict, cash)
+                output = sell_only_rebalance(input_dict)
             else:
-                output = buy_only_rebalance(input_dict, cash)
+                output = buy_only_rebalance(input_dict)
             out_df = pd.DataFrame(output)
             orig = df[['Ticker', 'target (in %)']].rename(columns={'target (in %)': 'Input Target'})
             out_df = out_df.merge(orig, on='Ticker')
