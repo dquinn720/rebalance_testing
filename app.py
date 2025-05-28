@@ -264,8 +264,8 @@ def sell_only_rebalance(input_dict: dict) -> List[dict]:
     total_trade = sum(item.get('Trade', 0) for item in out)
     out.append({
         "Ticker": 'CASH-TRADE',
-        'Risk': 'Cash',
-        'Asset Class': 'Cash',
+        "Risk": input_dict['CASH-TRADE']['risk'],
+        "Asset Class": input_dict['CASH-TRADE']['asset_class'],
         "Target": input_dict['CASH-TRADE']['target'],
         "Constrained": input_dict['CASH-TRADE']['constrained'],
         "Holding": input_dict['CASH-TRADE']['holding'],
