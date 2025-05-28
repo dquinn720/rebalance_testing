@@ -238,7 +238,7 @@ def sell_only_rebalance(input_dict: dict) -> List[dict]:
     first = collect_leaf_allocations(tree)
     second_input = {}
     for t, m in data.items():
-        if ticker != 'CASH-TRADE':
+        if t != 'CASH-TRADE':
             second_input[t] = {
                 'risk': m['risk'],
                 'asset_class': m['asset_class'],
