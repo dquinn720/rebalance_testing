@@ -337,6 +337,7 @@ if uploaded is not None:
             out_df = out_df.sort_values(by=['Risk','Asset Class','Target'], ascending=[True, True, False]) 
 
             st.dataframe(out_df)
+            st.dataframe(input_dict)
             csv = out_df.to_csv(index=True).encode('utf-8')
             st.download_button(
                 "Download results as CSV",
