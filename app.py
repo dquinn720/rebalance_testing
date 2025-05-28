@@ -166,11 +166,11 @@ def collect_leaf_allocations(nodes, results=None):
 
 
 def targets_pct_to_dollars(data_dict: dict) -> dict:
-    total_holding = sum(decimal(meta.get('holding') or 0) for meta in data_dict.values())
+    total_holding = sum(float(meta.get('holding') or 0) for meta in data_dict.values())
     new = {}
     for t, meta in data_dict.items():
         m = meta.copy()
-        tgt = decimal(meta.get('target') or 0)
+        tgt = float(meta.get('target') or 0)
         if 0 <= tgt <= 1:
             m['target'] = round(tgt * total_holding, 2)
         else:
