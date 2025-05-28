@@ -310,6 +310,7 @@ if uploaded is not None:
                 'holding': row.get('holding (in $)', 0)
             }
             for _, row in df.iterrows()
+        }
         if cash > 0:
             input_dict['CASH-TRADE'] = {'risk': 'Defensive', 'asset_class': 'Cash', 'target':0, 'constrained': 0, 'holding':cash}
         elif cash < 0:
