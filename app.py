@@ -201,35 +201,37 @@ def full_rebalance(input_dict):
 
 def use_cash(input_dict: dict) -> List[dict]:
     data = targets_pct_to_dollars(input_dict)
-    tree = build_hierarchy(data)
+    adjusted_input = {}
+    for ticker, meta in data.items():
+        constraint = max(float(meta.get("holding") or 0.0),float(meta.get("constrained") or 0.0))
+        if ticker != 'CASH-TRADE':
+          adjusted_input[ticker] = {
+          "risk": meta.get("risk"),
+          "asset_class": meta.get("asset_class"),
+          "target": meta.get("target"),
+          "constrained": constraint,
+          "holding": meta.get("holding")}
+        else:
+          adjusted_input[ticker] = {
+          "risk": meta.get("risk"),
+          "asset_class": meta.get("asset_class"),
+          "target": meta.get("target"),
+          "constrained": 0,
+          "holding": meta.get("holding")}
+    tree = build_hierarchy(adjusted_input)
     waterfall_with_min_constraint(tree)
-    first = collect_leaf_allocations(tree)
-    second_input = {}
-    for t, m in data.items():
-        second_input[t] = {
-            'risk': m['risk'],
-            'asset_class': m['asset_class'],
-            'target': first.get(t, 0),
-            'constrained': m.get('holding'),
-            'holding': m.get('holding')
-        }
-    tree2 = build_hierarchy(second_input)
-    waterfall_with_min_constraint(tree2)
-    second = collect_leaf_allocations(tree2)
-    out = []
-    for t, m in second_input.items():
-        out.append({
-            'Ticker': t,
-            'Risk': m['risk'],
-            'Asset Class': m['asset_class'],
-            'Target': m['target'],
-            'Constrained': m.get('constrained'),
-            'Holding': m.get('holding'),
-            'Allocation': second.get(t, 0),
-            'Trade': round(second.get(t, 0) - (m.get('holding') or 0), 2)
+    result = collect_leaf_allocations(tree)
+    output = []
+    for ticker, meta in adjusted_input.items():
+        output.append({
+            "Ticker": ticker,
+            "Target": meta["target"],
+            "Constrained": meta["constrained"],
+            "Holding": meta["holding"],
+            "Allocation": round(result.get(ticker, 0.0), 2),
+            "Trade": round(result.get(ticker, 0.0) - (meta["holding"] or 0.0), 2)
         })
-    return sorted(out, key=lambda x: x['Ticker'])
-
+    return sorted(output, key=lambda x: x["Ticker"])
 
 def raise_cash(input_dict: dict) -> List[dict]:
     data = targets_pct_to_dollars(input_dict)
