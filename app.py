@@ -225,6 +225,8 @@ def use_cash(input_dict: dict) -> List[dict]:
     for ticker, meta in adjusted_input.items():
         output.append({
             "Ticker": ticker,
+            "Risk": meta["risk"],
+            "Asset Class": meta["asset_class"],
             "Target": meta["target"],
             "Constrained": meta["constrained"],
             "Holding": meta["holding"],
